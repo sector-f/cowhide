@@ -169,7 +169,7 @@ pkgselect() {
 }
 
 dirpurge() {
-	if [[ -n "$purge" ]]; then
+	if [[ -n "$purge" && $action == "update" ]]; then
 		if ask "Remove build directories?"; then
 			for directory in "${downloads[@]}"; do
 				yes | rm -r $aurdir/$directory
