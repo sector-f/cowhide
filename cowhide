@@ -6,11 +6,15 @@
 
 SHORT="d:hpb:"
 LONG="directory:,builddir:,help,purge"
-OPTIONS=$(getopt -o $(echo $SHORT) -l $(echo $LONG) -n "$0" -- "$@")
+OPTIONS=$(getopt -o "$SHORT" -l "$LONG" -n "$0" -- "$@")
 eval set -- "$OPTIONS"
 
 aurdir="$HOME/builds"
 action="update"
+
+bold="$(tput bold)"
+italic="$(tput sitm)"
+reset="$(tput sgr0)"
 
 #########################
 # Options ###############
@@ -32,9 +36,6 @@ while true; do
 			shift 2
 			;;
 		-h|--help)
-			bold="$(tput bold)"
-			italic="$(tput sitm)"
-			reset="$(tput sgr0)"
 			echo "
 ${bold}NAME${reset}
 	Cowhide - cower wrapper for updating AUR packages
@@ -84,7 +85,7 @@ done
 
 ask() {
 	read -r -p "$1 [y/N] " ans
-	case  $(awk '{ print tolower($0) }' <<< $ans) in
+	case  $(awk '{ print tolower($0) }' <<< "$ans") in
 		y|yes) return 0 ;;
 		*) return 1 ;;
 	esac
@@ -131,34 +132,63 @@ buildprompt() {
 
 build() {
 	cd "$aurdir/$package" || exit 1
-	makepkg -sr
-	[[ $action == "builddirectory" ]] && rm PKGBUILD
+	makepkg -sr && [[ $action == "builddirectory" ]] && rm PKGBUILD
 	pkginstall
 }
 
 pkginstall() {
 	eval "$(awk '$1 ~ /^pkgver/' PKGBUILD)"
 	eval "$(awk '$1 ~ /^pkgrel/' PKGBUILD)"
-	ask "Install $package?"  && sudo pacman -U $package-$pkgver-$pkgrel-*.pkg.tar.xz
+	ask "Install $package?"  && sudo pacman -U "$package-$pkgver-$pkgrel-"*".pkg.tar.xz"
 }
 
 pkgselect() {
 	IFS=' '
 	pkgnumber=1
-	echo "Available AUR package updates:"
-	for package in "${display[@]}"; do
-		printf '%s\n' "$(tput bold)$(tput setaf 1)($pkgnumber)$(tput sgr0) $package"
-		((pkgnumber++))
-	done
 
+	case $action in
+		update)
+			echo "Available AUR package updates:"
+			for package in "${display[@]}"; do
+				echo "${bold}$(tput setaf 1)($pkgnumber)${reset} $package"
+				((pkgnumber++))
+			done
+			;;
+		builddirectory)
+			for directory in $builddir/*; do
+				if [[ -d $directory ]]; then
+					if grep -sq 'pkgbase=' "$directory/PKGBUILD"; then
+						eval "$(awk '$1 ~ /pkgbase=/' "$directory/PKGBUILD")"
+					fi
+					if grep -sq 'pkgname=' "$directory/PKGBUILD"; then
+						eval "$(awk '$1 ~ /pkgname=/' "$directory/PKGBUILD")"
+						buildpackages+=($pkgname)
+						buildfolders+=("$(basename "$directory")")
+					fi
+				fi
+			done
+
+			echo "AUR packages found in $builddir:"
+
+			for package in "${buildpackages[@]}"; do
+				echo "${bold}$(tput setaf 1)($pkgnumber)${reset} $package"
+				((pkgnumber++))
+			done
+			aurdir="$builddir"
+			available=(${buildfolders[@]})
+			;;
+		*)
+			return 1
+			;;
+	esac
 	echo -ne "\n"
 
-	read -p "Enter packages to be updated (ex: 1,2,3 or 1-3) or * for all " -r
+	read -p "Enter packages to be updated (ex: 1,4,6-9) or * for all: " -r
 	if [[ -n $REPLY ]]; then
 		if [[ $REPLY == '*' ]]; then
 			downloads=(${available[@]})
 		else
-			list=($(tr -d '{}' <<< "$(eval "echo $(sed 's/-/\.\./g' <<< {$REPLY})")"))
+			list=($(getrange "$REPLY"))
 			downloads=
 			for n in "${list[@]}"; do
 				(( n-- ))
@@ -168,79 +198,48 @@ pkgselect() {
 	fi
 }
 
+getrange () {
+  local input=() nums=()
+  IFS=, read -ra input <<< "$1"
+  for i in "${input[@]}"; do
+    if [[ $i =~ ^[[:digit:]]+-[[:digit:]]+$ ]]; then
+      eval "nums+=({${i%-*}..${i#*-}})"
+    elif [[ $i =~ [[:digit:]]+ ]]; then
+      nums+=("$i")
+    else
+      echo "Invalid number or range: $i" >&2
+    fi
+  done
+  printf '%s\n' "${nums[*]}"
+}
+
 dirpurge() {
 	if [[ -n "$purge" && $action == "update" ]]; then
 		if ask "Remove build directories?"; then
 			for directory in "${downloads[@]}"; do
-				yes | rm -r $aurdir/$directory
+				yes | rm -r "${aurdir:?}/$directory"
 			done
 		fi
 	fi
-}
-
-builddirectory() {
-	cd "$builddir" || exit 1
-	IFS=' '
-	pkgnumber=1
-
-	for directory in $builddir/*; do
-		if [[ -d $directory ]]; then
-			if [[ -n $(grep -s 'pkgbase=' "$directory/PKGBUILD") ]]; then
-				eval "$(awk '$1 ~ /pkgbase=/' "$directory/PKGBUILD")"
-			fi
-			if [[ -n $(grep -s 'pkgname=' "$directory/PKGBUILD") ]]; then
-				eval "$(awk '$1 ~ /pkgname=/' "$directory/PKGBUILD")"
-				buildpackages+=($pkgname)
-				buildfolders+=("$(basename $directory)")
-			fi
-		fi
-	done
-
-	echo "AUR packages found in $builddir:"
-
-	for package in ${buildpackages[@]}; do
-		printf '%s\n' "$(tput bold)$(tput setaf 1)($pkgnumber)$(tput sgr0) $package"
-		((pkgnumber++))
-	done
-
-	echo -en "\n"
-
-	read -p "Enter packages to be updated (ex: 1,2,3 or 1-3) or * for all " -r
-	if [[ -n $REPLY ]]; then
-		if [[ $REPLY == '*' ]]; then
-			buildthese=(${buildfolders[@]})
-		else
-			list=($(tr -d '{}' <<< "$(eval "echo $(sed 's/-/\.\./g' <<< {$REPLY})")"))
-			buildthese=
-			for n in "${list[@]}"; do
-				(( --n ))
-				buildthese="$buildthese${buildfolders[$n]} "
-			done && buildthese=($buildthese)
-		fi
-	fi
-
-	audir="$builddir"
-	downloads=(${buildthese[@]})
-	auditprompt
 }
 
 #########################
 # Body ##################
 #########################
 
-[[ ! -d "$aurdir" ]] && mkdir -p "$aurdir"
-cd "$aurdir" || exit 1
-
-IFS=$'\n'
-# Get output of cower -u
-coweroutput=($(cower -u --color=always))
-# Remove leading '::' (and color codes) from `cower -u` output
-display=($(printf '%s\n' ${coweroutput[@]} | awk '{$1=""; sub(" ", ""); print}'))
-# Get package names from `cower -u` (awk is used to remove the color codes)
-available=($(printf '%s\n' ${coweroutput[@]} | awk '{print substr($2,5);}'))
-
 case $action in
 	update)
+		[[ ! -d "$aurdir" ]] && mkdir -p "$aurdir"
+		cd "$aurdir" || exit 1
+
+		IFS=$'\n'
+		# Get output of cower -u
+		coweroutput=($(cower -u --color=always))
+		# Remove leading '::' (and color codes) from `cower -u` output
+		display=($(printf '%s\n' "${coweroutput[@]}" | awk '{$1=""; sub(" ", ""); print}'))
+		# Get package names from `cower -u` (awk is used to remove the color codes)
+		available=($(printf '%s\n' "${coweroutput[@]}" | awk '{print substr($2,5);}'))
+
 		pkgselect
 
 		if [[ -n "${downloads[@]}" ]]; then
@@ -252,12 +251,13 @@ case $action in
 		if [[ -n "${downloads[@]}" ]]; then
 			dirpurge
 		fi
-
 		;;
 	builddirectory)
-		builddirectory
+		cd "$builddir" || exit 1
+		pkgselect
+		auditprompt
 		;;
 	*)
-		break
+		exit 1
 		;;
 esac
