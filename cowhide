@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+
+#########################
+# Initialization ########
+#########################
+
+SHORT="d:hpb:"
+LONG="directory:,builddir:,help,purge"
+OPTIONS=$(getopt -o $(echo $SHORT) -l $(echo $LONG) -n "$0" -- "$@")
+eval set -- "$OPTIONS"
+
+aurdir="$HOME/builds"
+action="update"
+
+#########################
+# Options ###############
+#########################
+
+while true; do
+	case "$1" in
+		-d|--directory)
+			aurdir=$(readlink -m "$2")
+			shift 2
+			;;
+		-p|--purge)
+			purge=1
+			shift
+			;;
+		-b|--builddir)
+			action="builddirectory"
+			builddir=$(readlink -m "$2")
+			shift 2
+			;;
+		-h|--help)
+			bold="$(tput bold)"
+			italic="$(tput sitm)"
+			reset="$(tput sgr0)"
+			echo "
+${bold}NAME${reset}
+	Cowhide - cower wrapper for updating AUR packages
+
+${bold}SYNOPSIS${reset}
+	${bold}cowhide${reset} [${bold}--directory${reset} ${italic}DIR${reset}] [${bold}--builddir${reset} ${italic}DIR${reset}] [${bold}--purge${reset}]
+
+${bold}DESCRIPTION${reset}
+	${bold}cowhide${reset} is a cower wrapper written in bash that simplifies the process of updating AUR
+	packages. It allows the user to download, build, and install updates, and provides the
+	option of editing PKGBUILDs before compiling.
+
+${bold}OPTIONS${reset}
+	${bold}-h, --help${reset}
+		Print this help information.
+
+	${bold}-d, --directory${reset} <DIR>
+		Set the directory that packages are saved to.
+		The default is '~/builds'.
+
+	${bold}-p, --purge${reset}
+		If this option is passed, the folders downloaded by cower will be deleted. The
+		folder they were downloaded to will not be deleted. E.g. '~/builds/linux-git/'
+		will be deleted but '~/builds/' will not. This is to prevent the accidental
+		deletion of preexisting files.
+
+	${bold}-b, --builddir${reset} <DIR>
+		Look in DIR for directories that contain PKGBUILDs and give the option of
+		building/installing those packages. ${bold}cowhide${reset} will not update preinstalled
+		packages if this option is passed.
+	"
+			exit
+			;;
+		--)
+			shift
+			break
+			;;
+		*)
+			break
+			;;
+	esac
+done
+
+#########################
+# Functions #############
+#########################
+
+ask() {
+	read -r -p "$1 [y/N] " ans
+	case  $(awk '{ print tolower($0) }' <<< $ans) in
+		y|yes) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+chooseeditor() {
+	read -p 'Edit PKGBUILD with: ' -r
+	if type "$REPLY" 2> /dev/null; then
+		EDITOR="$REPLY"
+		audit
+	else
+		echo "Command \"$REPLY\" not found"
+		chooseeditor
+	fi
+}
+
+audit() {
+	if [[ -z "$EDITOR" ]]; then
+		echo 'Your environment variables do not contain $EDITOR'
+		chooseeditor
+	else
+		$EDITOR "$aurdir/$package/PKGBUILD"
+	fi
+	auditprompt
+}
+
+auditprompt() {
+	if [[ ! " ${completed[@]} " =~ " $package " ]]; then
+	for package in "${downloads[@]}" ; do
+		read -p "Edit PKGBUILD for $package? [Y/n] (\"A\" to abort) " -r ans
+		case "${ans,}" in
+			a) exit ;;
+			n) buildprompt ;;
+			*) audit ;;
+		esac
+		completed+=("$package")
+	done
+	fi
+}
+
+buildprompt() {
+	ask "Build $package?" && build
+}
+
+build() {
+	cd "$aurdir/$package" || exit 1
+	makepkg -sr
+	[[ $action == "builddirectory" ]] && rm PKGBUILD
+	pkginstall
+}
+
+pkginstall() {
+	eval "$(awk '$1 ~ /^pkgver/' PKGBUILD)"
+	eval "$(awk '$1 ~ /^pkgrel/' PKGBUILD)"
+	ask "Install $package?"  && sudo pacman -U $package-$pkgver-$pkgrel-*.pkg.tar.xz
+}
+
+pkgselect() {
+	IFS=' '
+	pkgnumber=1
+	echo "Available AUR package updates:"
+	for package in "${display[@]}"; do
+		printf '%s\n' "$(tput bold)$(tput setaf 1)($pkgnumber)$(tput sgr0) $package"
+		((pkgnumber++))
+	done
+
+	echo -ne "\n"
+
+	read -p "Enter packages to be updated (ex: 1,2,3 or 1-3) or * for all " -r
+	if [[ -n $REPLY ]]; then
+		if [[ $REPLY == '*' ]]; then
+			downloads=(${available[@]})
+		else
+			list=($(tr -d '{}' <<< "$(eval "echo $(sed 's/-/\.\./g' <<< {$REPLY})")"))
+			downloads=
+			for n in "${list[@]}"; do
+				(( n-- ))
+				downloads="$downloads${available[$n]} "
+			done && downloads=($downloads)
+		fi
+	fi
+}
+
+dirpurge() {
+	if [[ -n "$purge" ]]; then
+		if ask "Remove build directories?"; then
+			for directory in "${downloads[@]}"; do
+				yes | rm -r $aurdir/$directory
+			done
+		fi
+	fi
+}
+
+builddirectory() {
+	cd "$builddir" || exit 1
+	IFS=' '
+	pkgnumber=1
+
+	for directory in $builddir/*; do
+		if [[ -d $directory ]]; then
+			if [[ -n $(grep -s 'pkgbase=' "$directory/PKGBUILD") ]]; then
+				eval "$(awk '$1 ~ /pkgbase=/' "$directory/PKGBUILD")"
+			fi
+			if [[ -n $(grep -s 'pkgname=' "$directory/PKGBUILD") ]]; then
+				eval "$(awk '$1 ~ /pkgname=/' "$directory/PKGBUILD")"
+				buildpackages+=($pkgname)
+				buildfolders+=("$(basename $directory)")
+			fi
+		fi
+	done
+
+	echo "AUR packages found in $builddir:"
+
+	for package in ${buildpackages[@]}; do
+		printf '%s\n' "$(tput bold)$(tput setaf 1)($pkgnumber)$(tput sgr0) $package"
+		((pkgnumber++))
+	done
+
+	echo -en "\n"
+
+	read -p "Enter packages to be updated (ex: 1,2,3 or 1-3) or * for all " -r
+	if [[ -n $REPLY ]]; then
+		if [[ $REPLY == '*' ]]; then
+			buildthese=(${buildfolders[@]})
+		else
+			list=($(tr -d '{}' <<< "$(eval "echo $(sed 's/-/\.\./g' <<< {$REPLY})")"))
+			buildthese=
+			for n in "${list[@]}"; do
+				(( --n ))
+				buildthese="$buildthese${buildfolders[$n]} "
+			done && buildthese=($buildthese)
+		fi
+	fi
+
+	audir="$builddir"
+	downloads=(${buildthese[@]})
+	auditprompt
+}
+
+#########################
+# Body ##################
+#########################
+
+[[ ! -d "$aurdir" ]] && mkdir -p "$aurdir"
+cd "$aurdir" || exit 1
+
+IFS=$'\n'
+# Get output of cower -u
+coweroutput=($(cower -u --color=always))
+# Remove leading '::' (and color codes) from `cower -u` output
+display=($(printf '%s\n' ${coweroutput[@]} | awk '{$1=""; sub(" ", ""); print}'))
+# Get package names from `cower -u` (awk is used to remove the color codes)
+available=($(printf '%s\n' ${coweroutput[@]} | awk '{print substr($2,5);}'))
+
+case $action in
+	update)
+		pkgselect
+
+		if [[ -n "${downloads[@]}" ]]; then
+			cower -df "${downloads[@]}"
+		fi
+
+		auditprompt
+
+		if [[ -n "${downloads[@]}" ]]; then
+			dirpurge
+		fi
+
+		;;
+	builddirectory)
+		builddirectory
+		;;
+	*)
+		break
+		;;
+esac
