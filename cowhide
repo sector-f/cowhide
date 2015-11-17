@@ -148,11 +148,16 @@ pkgselect() {
 
 	case $action in
 		update)
-			echo "Available AUR package updates:"
-			for package in "${display[@]}"; do
-				echo "${bold}$(tput setaf 1)($pkgnumber)${reset} $package"
-				((pkgnumber++))
-			done
+			if [[ -n "${available[@]}" ]]; then
+				echo "Available AUR package updates:"
+				for package in "${display[@]}"; do
+					echo "${bold}$(tput setaf 1)($pkgnumber)${reset} $package"
+					((pkgnumber++))
+				done
+				echo -ne "\n"
+			else
+				echo "No AUR package updates available"
+			fi
 			;;
 		builddirectory)
 			for directory in $builddir/*; do
@@ -168,32 +173,39 @@ pkgselect() {
 				fi
 			done
 
-			echo "AUR packages found in $builddir:"
+			if [[ -n "${buildfolders[@]}" ]]; then
+				echo "AUR packages found in $builddir:"
+	
+				for package in "${buildpackages[@]}"; do
+					echo "${bold}$(tput setaf 1)($pkgnumber)${reset} $package"
+					((pkgnumber++))
+				done
+				echo -ne "\n"
 
-			for package in "${buildpackages[@]}"; do
-				echo "${bold}$(tput setaf 1)($pkgnumber)${reset} $package"
-				((pkgnumber++))
-			done
-			aurdir="$builddir"
-			available=(${buildfolders[@]})
+				aurdir="$builddir"
+				available=(${buildfolders[@]})
+			else
+				echo "No AUR packages found in $builddir"
+			fi
 			;;
 		*)
 			return 1
 			;;
 	esac
-	echo -ne "\n"
 
-	read -p "Enter packages to be updated (ex: 1,4,6-9) or * for all: " -r
-	if [[ -n $REPLY ]]; then
-		if [[ $REPLY == '*' ]]; then
-			downloads=(${available[@]})
-		else
-			list=($(getrange "$REPLY"))
-			downloads=
-			for n in "${list[@]}"; do
-				(( n-- ))
-				downloads="$downloads${available[$n]} "
-			done && downloads=($downloads)
+	if [[ -n "${available[@]}" ]]; then
+		read -p "Enter packages numbers (e.g. 1,4,6-9) or * for all: " -r
+		if [[ -n "${REPLY// }" ]]; then
+			if [[ $REPLY == '*' ]]; then
+				downloads=(${available[@]})
+			else
+				list=($(getrange "$REPLY"))
+				downloads=
+				for n in "${list[@]}"; do
+					(( n-- ))
+					downloads="$downloads${available[$n]} "
+				done && downloads=($downloads)
+			fi
 		fi
 	fi
 }
@@ -251,6 +263,7 @@ case $action in
 		if [[ -n "${downloads[@]}" ]]; then
 			dirpurge
 		fi
+
 		;;
 	builddirectory)
 		cd "$builddir" || exit 1
