@@ -132,14 +132,17 @@ buildprompt() {
 
 build() {
 	cd "$aurdir/$package" || exit 1
-	makepkg -sr && [[ $action == "builddirectory" ]] && rm PKGBUILD
-	pkginstall
+	makepkg -sr && pkginstall
 }
 
 pkginstall() {
 	eval "$(awk '$1 ~ /^pkgver/' PKGBUILD)"
 	eval "$(awk '$1 ~ /^pkgrel/' PKGBUILD)"
 	ask "Install $package?"  && sudo pacman -U "$package-$pkgver-$pkgrel-"*".pkg.tar.xz"
+	if  [[ $action == "builddirectory" ]]; then
+		rm PKGBUILD
+	fi
+
 }
 
 pkgselect() {
