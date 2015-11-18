@@ -175,7 +175,7 @@ pkgselect() {
 
 			if [[ -n "${buildfolders[@]}" ]]; then
 				echo "AUR packages found in $builddir:"
-	
+
 				for package in "${buildpackages[@]}"; do
 					echo "${bold}$(tput setaf 1)($pkgnumber)${reset} $package"
 					((pkgnumber++))
