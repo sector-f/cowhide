@@ -4,13 +4,13 @@
 # Initialization ########
 #########################
 
-SHORT="d:hpb:"
-LONG="directory:,builddir:,help,purge"
-OPTIONS=$(getopt -o "$SHORT" -l "$LONG" -n "$0" -- "$@")
+SHORT="d:hpb:u"
+LONG="directory:,builddir:,help,purge,update"
+OPTIONS=$(getopt -o "$SHORT" -l "$LONG" -n "$(basename $0)" -- "$@")
 eval set -- "$OPTIONS"
 
 aurdir="$HOME/builds"
-action="update"
+action="usage"
 
 bold="$(tput bold)"
 italic="$(tput sitm)"
@@ -23,16 +23,20 @@ reset="$(tput sgr0)"
 while true; do
 	case "$1" in
 		-d|--directory)
-			aurdir=$(readlink -m "$2")
+			aurdir=$(readlink -m "$2" 2> /dev/null)
 			shift 2
 			;;
 		-p|--purge)
 			purge=1
 			shift
 			;;
+		-u|--update)
+			action="update"
+			shift
+			;;
 		-b|--builddir)
 			action="builddirectory"
-			builddir=$(readlink -m "$2")
+			builddir=$(readlink -m "$2" 2> /dev/null)
 			shift 2
 			;;
 		-h|--help)
@@ -41,7 +45,7 @@ ${bold}NAME${reset}
 	Cowhide - cower wrapper for updating AUR packages
 
 ${bold}SYNOPSIS${reset}
-	${bold}cowhide${reset} [${bold}--directory${reset} ${italic}DIR${reset}] [${bold}--builddir${reset} ${italic}DIR${reset}] [${bold}--purge${reset}]
+	${bold}cowhide${reset} ${bold}--builddir${reset} ${italic}DIR${reset}|${bold}--update${reset} [${bold}--directory${reset} ${italic}DIR${reset}] [${bold}--purge${reset}]
 
 ${bold}DESCRIPTION${reset}
 	${bold}cowhide${reset} is a cower wrapper written in bash that simplifies the process of updating AUR
@@ -240,6 +244,9 @@ dirpurge() {
 #########################
 
 case $action in
+	usage)
+		echo "Usage: ${bold}cowhide${reset} ${bold}--builddir${reset} ${italic}DIR${reset}|${bold}--update${reset} [${bold}--directory${reset} ${italic}DIR${reset}] [${bold}--purge${reset}]"
+		;;
 	update)
 		[[ ! -d "$aurdir" ]] && mkdir -p "$aurdir"
 		cd "$aurdir" || exit 1
@@ -266,9 +273,13 @@ case $action in
 
 		;;
 	builddirectory)
-		cd "$builddir" || exit 1
-		pkgselect
-		auditprompt
+		if [[ -d "$builddir" ]]; then
+			cd "$builddir" || exit 1
+			pkgselect
+			auditprompt
+		else
+			echo ""$builddir" not found"
+		fi
 		;;
 	*)
 		exit 1

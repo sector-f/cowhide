@@ -2,7 +2,7 @@
 Cowhide - cower wrapper for updating AUR packages
 
 ### SYNOPSIS
-**cowhide** [**--directory** *DIR*] [**--builddir** *DIR*] [**--purge**]
+**cowhide** **--builddir** *DIR*|**--update** [**--directory** *DIR*] [**--purge**]
 
 ### DESCRIPTION
 **cowhide** is a cower wrapper written in bash that simplifies the process of updating AUR packages. It allows the user to download, build, and install updates, and provides the option of editing PKGBUILDs before compiling.
