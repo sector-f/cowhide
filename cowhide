@@ -68,8 +68,7 @@ ${bold}OPTIONS${reset}
 
 	${bold}-b, --builddir${reset} <DIR>
 		Look in DIR for directories that contain PKGBUILDs and give the option of
-		building/installing those packages. ${bold}cowhide${reset} will not update preinstalled
-		packages if this option is passed.
+		building/installing those packages.
 	"
 			exit
 			;;

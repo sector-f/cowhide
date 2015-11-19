@@ -14,4 +14,4 @@ Cowhide - cower wrapper for updating AUR packages
 
 `-p` or `--purge` If this option is passed, the folders downloaded by cower will be deleted. The folder they were downloaded to will not be deleted. E.g. `~/builds/linux-git/` will be deleted but `~/builds/` will not. This is to prevent the accidental deletion of preexisting files.
 
-`-b` or `--builddirectory <DIR>` Look in DIR for directories that contain PKGBUILDs and give the option of building/installing those packages. **Cowhide** will not update preinstalled packages if this option is passed.
+`-b` or `--builddirectory <DIR>` Look in DIR for directories that contain PKGBUILDs and give the option of building/installing those packages.
