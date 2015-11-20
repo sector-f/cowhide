@@ -116,32 +116,31 @@ audit() {
 }
 
 auditprompt() {
-	if [[ ! " ${completed[@]} " =~ " $package " ]]; then
 	for package in "${downloads[@]}" ; do
-		read -p "Edit PKGBUILD for $package? [Y/n] (\"A\" to abort) " -r ans
-		case "${ans,}" in
-			a) exit ;;
-			n) buildprompt ;;
-			*) audit ;;
-		esac
-		completed+=("$package")
+		if [[ ! " ${completed[@]} " =~ " $package " ]]; then
+			cd "$aurdir/$package" || exit 1
+			source PKGBUILD
+			read -p "Edit PKGBUILD for $package? [Y/n] (\"A\" to abort) " -r ans
+			case "${ans,}" in
+				a) exit ;;
+				n) buildprompt ;;
+				*) audit ;;
+			esac
+			completed+=("$package")
+		fi
 	done
-	fi
 }
 
 buildprompt() {
-	ask "Build $package?" && build
+	ask "Build $package?" && buildpackage
 }
 
-build() {
-	cd "$aurdir/$package" || exit 1
+buildpackage() {
 	makepkg -sr
 	pkginstall
 }
 
 pkginstall() {
-	eval "$(awk '$1 ~ /^pkgver/' PKGBUILD)"
-	eval "$(awk '$1 ~ /^pkgrel/' PKGBUILD)"
 	ask "Install $package?"  && sudo pacman -U $package-$pkgver-$pkgrel-*.pkg.tar.xz
 }
 
@@ -165,12 +164,9 @@ pkgselect() {
 		builddirectory)
 			for directory in $builddir/*; do
 				if [[ -d $directory ]]; then
-					if grep -sq 'pkgbase=' "$directory/PKGBUILD"; then
-						eval "$(awk '$1 ~ /pkgbase=/' "$directory/PKGBUILD")"
-					fi
 					if grep -sq 'pkgname=' "$directory/PKGBUILD"; then
-						eval "$(awk '$1 ~ /pkgname=/' "$directory/PKGBUILD")"
-						buildpackages+=($pkgname)
+						source "$directory/PKGBUILD"
+						buildpackages+=("$pkgname")
 						buildfolders+=("$(basename "$directory")")
 					fi
 				fi
