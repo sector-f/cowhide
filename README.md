@@ -10,8 +10,10 @@ Cowhide - cower wrapper for updating AUR packages
 ### OPTIONS
 `-h` or `--help` Print help information.
 
-`-d` or `--directory <DIR>` Set the directory that packages are saved to. The default is `~/builds`.
+`-b` or `--builddirectory <DIR>` Look in DIR for directories that contain PKGBUILDs and give the option of building/installing those packages.
+
+`-u` or `--update` Check for outdated AUR packages and allow the user to download, build, and install the updated packages.
+
+`-d` or `--directory <DIR>` Set the directory that packages are saved to when `-u` is passed. The default is `~/builds`.
 
 `-p` or `--purge` If this option is passed, the folders downloaded by cower will be deleted. The folder they were downloaded to will not be deleted. E.g. `~/builds/linux-git/` will be deleted but `~/builds/` will not. This is to prevent the accidental deletion of preexisting files.
-
-`-b` or `--builddirectory <DIR>` Look in DIR for directories that contain PKGBUILDs and give the option of building/installing those packages.

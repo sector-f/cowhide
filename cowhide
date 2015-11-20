@@ -56,8 +56,16 @@ ${bold}OPTIONS${reset}
 	${bold}-h, --help${reset}
 		Print this help information.
 
+	${bold}-b, --builddir${reset} <DIR>
+		Look in DIR for directories that contain PKGBUILDs and give the option of
+		building/installing those packages.
+
+	${bold}-u, --update${reset}
+		Check for outdated AUR packages and allow the user to download, build, and
+		install the updated packages.
+
 	${bold}-d, --directory${reset} <DIR>
-		Set the directory that packages are saved to.
+		Set the directory that packages are saved to when -u is passed.
 		The default is '~/builds'.
 
 	${bold}-p, --purge${reset}
@@ -65,10 +73,6 @@ ${bold}OPTIONS${reset}
 		folder they were downloaded to will not be deleted. E.g. '~/builds/linux-git/'
 		will be deleted but '~/builds/' will not. This is to prevent the accidental
 		deletion of preexisting files.
-
-	${bold}-b, --builddir${reset} <DIR>
-		Look in DIR for directories that contain PKGBUILDs and give the option of
-		building/installing those packages.
 	"
 			exit
 			;;
