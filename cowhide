@@ -277,7 +277,7 @@ case $action in
 			pkgselect
 			auditprompt
 		else
-			echo ""$builddir" not found"
+			echo "Directory "\"$builddir\"" not found"
 		fi
 		;;
 	*)
