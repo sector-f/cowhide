@@ -33,11 +33,13 @@ while true; do
 		-u|--update)
 			action="update"
 			shift
+			break
 			;;
 		-b|--builddir)
 			action="builddirectory"
 			builddir=$(readlink -m "$2" 2> /dev/null)
 			shift 2
+			break
 			;;
 		-h|--help)
 			echo "
