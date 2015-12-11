@@ -142,7 +142,7 @@ buildprompt() {
 }
 
 buildpackage() {
-	makepkg -sr
+	makepkg -srf
 	pkginstall
 }
 
