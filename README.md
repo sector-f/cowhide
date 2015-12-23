@@ -17,3 +17,6 @@ Cowhide - cower wrapper for updating AUR packages
 `-d` or `--directory <DIR>` Set the directory that packages are saved to when `-u` is passed. The default is `~/builds`.
 
 `-p` or `--purge` If this option is passed, the folders downloaded by cower will be deleted. The folder they were downloaded to will not be deleted. E.g. `~/builds/linux-git/` will be deleted but `~/builds/` will not. This is to prevent the accidental deletion of preexisting files.
+
+### ENVIRONMENT VARIABLES
+`MAKEPKG` Sets the command used to compile packages. The default is "makepkg --syncdeps --rmdeps --force"

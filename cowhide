@@ -12,6 +12,8 @@ eval set -- "$OPTIONS"
 aurdir="$HOME/builds"
 action="usage"
 
+[[ -z "$MAKEPKG" ]] && MAKEPKG='makepkg -srf'
+
 bold="$(tput bold)"
 italic="$(tput sitm)"
 reset="$(tput sgr0)"
@@ -31,52 +33,26 @@ while true; do
 			shift
 			;;
 		-u|--update)
-			action="update"
+			if [[ -z "$actionset" ]]; then
+				action="update"
+				actionset="yes"
+			fi
 			shift
-			break
 			;;
 		-b|--builddir)
-			action="builddirectory"
-			builddir=$(readlink -m "$2" 2> /dev/null)
+			if [[ -z "$actionset" ]]; then
+				action="builddirectory"
+				builddir=$(readlink -m "$2" 2> /dev/null)
+				actionset="yes"
+			fi
 			shift 2
-			break
 			;;
 		-h|--help)
-			echo "
-${bold}NAME${reset}
-	Cowhide - cower wrapper for updating AUR packages
-
-${bold}SYNOPSIS${reset}
-	${bold}cowhide${reset} ${bold}--builddir${reset} ${italic}DIR${reset}|${bold}--update${reset} [${bold}--directory${reset} ${italic}DIR${reset}] [${bold}--purge${reset}]
-
-${bold}DESCRIPTION${reset}
-	${bold}cowhide${reset} is a cower wrapper written in bash that simplifies the process of updating AUR
-	packages. It allows the user to download, build, and install updates, and provides the
-	option of editing PKGBUILDs before compiling.
-
-${bold}OPTIONS${reset}
-	${bold}-h, --help${reset}
-		Print this help information.
-
-	${bold}-b, --builddir${reset} <DIR>
-		Look in DIR for directories that contain PKGBUILDs and give the option of
-		building/installing those packages.
-
-	${bold}-u, --update${reset}
-		Check for outdated AUR packages and allow the user to download, build, and
-		install the updated packages.
-
-	${bold}-d, --directory${reset} <DIR>
-		Set the directory that packages are saved to when -u is passed.
-		The default is '~/builds'.
-
-	${bold}-p, --purge${reset}
-		If this option is passed, the folders downloaded by cower will be deleted. The
-		folder they were downloaded to will not be deleted. E.g. '~/builds/linux-git/'
-		will be deleted but '~/builds/' will not. This is to prevent the accidental
-		deletion of preexisting files.
-	"
-			exit
+			if [[ -z "$actionset" ]]; then
+				action="printhelp"
+				actionset="yes"
+			fi
+			shift
 			;;
 		--)
 			shift
@@ -142,12 +118,19 @@ buildprompt() {
 }
 
 buildpackage() {
-	makepkg -srf
+	$MAKEPKG
 	pkginstall
 }
 
 pkginstall() {
-	ask "Install $package?"  && sudo pacman -U $package-$pkgver-$pkgrel-*.pkg.tar.xz
+	ask "Install $package?" &&
+	if [[ -f /var/lib/pacman/db.lck ]]; then
+		echo "Pacman is currently in use; please wait."
+		while [[ -f /var/lib/pacman/db.lck ]]; do
+			sleep 5
+		done
+	fi &&
+	sudo pacman -U $package-$pkgver-$pkgrel-*.pkg.tar.xz
 }
 
 pkgselect() {
@@ -232,12 +215,58 @@ getrange () {
 
 dirpurge() {
 	if [[ -n "$purge" && $action == "update" ]]; then
-		if ask "Remove build directories?"; then
-			for directory in "${downloads[@]}"; do
-				yes | rm -r "${aurdir:?}/$directory"
-			done
-		fi
+		ask "Remove build directories?" &&
+		for directory in "${downloads[@]}"; do
+			yes | rm -r "${aurdir:?}/$directory"
+		done
 	fi
+}
+
+printhelp() {
+	echo "
+${bold}NAME${reset}
+	Cowhide - cower wrapper for updating AUR packages
+
+${bold}SYNOPSIS${reset}
+	${bold}cowhide${reset} ${bold}--builddir${reset} ${italic}DIR${reset}|${bold}--update${reset} [${bold}--directory${reset} ${italic}DIR${reset}] [${bold}--purge${reset}]
+
+${bold}DESCRIPTION${reset}
+	${bold}cowhide${reset} is a cower wrapper written in bash that simplifies the process of updating AUR
+	packages. It allows the user to download, build, and install updates, and provides the
+	option of editing PKGBUILDs before compiling.
+
+${bold}OPTIONS${reset}
+	${bold}-h, --help${reset}
+		Print this help information.
+
+	${bold}-b, --builddir${reset} <DIR>
+		Look in DIR for directories that contain PKGBUILDs and give the option of
+		building/installing those packages.
+
+	${bold}-u, --update${reset}
+		Check for outdated AUR packages and allow the user to download, build, and
+		install the updated packages.
+
+	${bold}-d, --directory${reset} <DIR>
+		Set the directory that packages are saved to when -u is passed.
+		The default is '~/builds'.
+
+	${bold}-p, --purge${reset}
+		If this option is passed, the folders downloaded by cower will be deleted. The
+		folder they were downloaded to will not be deleted. E.g. '~/builds/linux-git/'
+		will be deleted but '~/builds/' will not. This is to prevent the accidental
+		deletion of preexisting files.
+
+${bold}ENVIRONMENT VARIABLES${reset}
+	${bold}MAKEPKG${reset}
+		Sets the command used to compile packages.
+		The default is \"makepkg --syncdeps --rmdeps --force\"
+	"
+}
+
+printusage() {
+		echo -e "Usage: ${bold}cowhide${reset} ${bold}--builddir${reset} ${italic}DIR${reset}|${bold}--update${reset} [${bold}--directory${reset} ${italic}DIR${reset}] [${bold}--purge${reset}]\nSee ${bold}cowhide --help${reset} for more information"
+		exit 1
 }
 
 #########################
@@ -245,8 +274,11 @@ dirpurge() {
 #########################
 
 case $action in
+	printhelp)
+		printhelp
+		;;
 	usage)
-		echo "Usage: ${bold}cowhide${reset} ${bold}--builddir${reset} ${italic}DIR${reset}|${bold}--update${reset} [${bold}--directory${reset} ${italic}DIR${reset}] [${bold}--purge${reset}]"
+		printusage
 		;;
 	update)
 		[[ ! -d "$aurdir" ]] && mkdir -p "$aurdir"
@@ -286,3 +318,5 @@ case $action in
 		exit 1
 		;;
 esac
+
+exit 0
